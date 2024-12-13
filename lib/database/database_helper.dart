@@ -1,5 +1,6 @@
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
+import 'package:uts_pemrograman_bergerak/database/encryption_helper.dart';
 import '../models/user.dart';
 import '../models/password.dart';
 
@@ -45,6 +46,7 @@ class DatabaseHelper {
   // User operations
   Future<int> insertUser(User user) async {
     final db = await database;
+    user.password = EncryptionHelper.encryptPassword(user.password, user.username);
     try {
       return await db.insert('users', user.toMap());
     } catch (e) {
@@ -67,20 +69,32 @@ class DatabaseHelper {
 
   Future<List<Map<String, dynamic>>> loadPassword(int userId) async {
     final db = await database;
-    return await db.query(
+    final list = await db.query(
       'passwords',
       where: 'userId = ?',
       whereArgs: [userId],
     );
+    return list.map((map) {
+      final pw = map['password'] as String;
+      final username = map['username'] as String;
+      final decryptedPw = EncryptionHelper.decryptPassword(pw, username);
+      return {
+        'id': map['id'],
+        'userId': map['userId'],
+        'title': map['title'],
+        'username': map['username'],
+        'password': decryptedPw,
+      };
+    }).toList();
   }
 
-  // Password operations
   Future<int> insertPassword(Password password) async {
     final db = await database;
+    password.password = EncryptionHelper.encryptPassword(password.password, password.username);
     try {
       return await db.insert('passwords', password.toMap());
     } catch (e) {
-      return -1;
+      return 0;
     }
   }
 
@@ -89,7 +103,9 @@ class DatabaseHelper {
     try {
       List<Map<String, dynamic>> maps = await db.query('passwords');
       return List.generate(maps.length, (i) {
-        return Password.fromMap(maps[i]);
+        final password = Password.fromMap(maps[i]);
+        password.password = EncryptionHelper.decryptPassword(password.password, password.username);
+        return password;
       });
     } catch (e) {
       return [];
@@ -98,6 +114,7 @@ class DatabaseHelper {
 
   Future<int> updatePassword(Password password) async {
     final db = await database;
+    password.password = EncryptionHelper.encryptPassword(password.password, password.username);
     try {
       return await db.update(
         'passwords',
@@ -106,7 +123,6 @@ class DatabaseHelper {
         whereArgs: [password.id],
       );
     } catch (e) {
-      print(e);
       return 0;
     }
   }
@@ -120,7 +136,7 @@ class DatabaseHelper {
         whereArgs: [id],
       );
     } catch (e) {
-      return -1;
+      return 0;
     }
   }
 
@@ -128,9 +144,18 @@ class DatabaseHelper {
     final db = await database;
     final data = await db.query(
       'users',
-      where: 'username = ? AND password = ?',
-      whereArgs: [username, password],
+      where: 'username = ?',
+      whereArgs: [username],
     );
-    return data.isNotEmpty ? data : null;
+    if (data.isNotEmpty) {
+      final encryptedPassword = data.first['password'] as String;
+      final decryptedPassword = EncryptionHelper.decryptPassword(encryptedPassword, username);
+      if (decryptedPassword == password) {
+        return data;
+      }
+      return null;
+    }
+
+    return null;
   }
 }

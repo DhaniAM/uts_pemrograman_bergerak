@@ -86,8 +86,6 @@ class _PasswordScreenState extends State<PasswordScreen> {
                   );
                   await _dbHelper.insertPassword(newPassword);
                 } else {
-                  print("widget.userId: ${widget.userId}");
-                  print("password.userId: ${password.userId}");
                   // edit password
                   final updatedPassword = Password(
                     id: password.id,
